@@ -5,32 +5,122 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.util.Scanner;
 
+/**
+ * Console version of Connect-Four.
+ * Implements the console loop control. 
+ */
 public class ConsoleGame {
 
-	protected PrintStream out = System.out;
-	protected InputStream in = System.in;
-	//protected Scanner sc;
-	protected BufferedReader br;
+	/*
+	 * static field
+	 */
 	
-	protected ConnectFour c4 = new ConnectFour();
+	/**
+	 * Wrap human input from console
+	 */
+	private class ConsolePlayerInput implements IPlayerInput {
+		@Override
+		public int chooseColumn() {
+			
+			BufferedReader br = ConsoleGame.this.br;
+			
+			int col = -1;
+			try {
+				col = Integer.parseInt(br.readLine()) - 1;
+			} catch (IOException e) {
+				System.exit(1); // TODO error handle
+			}
+			return col;
+		}
+	}
 	
-	protected Player player1 = Player.Player1;
-	protected Player player2 = Player.Player2;
+	/**
+	 * Wrap robot-like input (decoration pattern)
+	 * Try to echo to the console as well.
+	 */
+	private class ConsoleRobotInput implements IPlayerInput {
+		
+		IPlayerInput input;
+		
+		private ConsoleRobotInput(IPlayerInput input) {
+			this.input = input;
+		}
+		
+		@Override
+		public int chooseColumn() {
+			int col = input.chooseColumn();
+			// echo to console
+			out.println(col+1);
+			return col;
+		}
+		
+	}
 	
-	public void beginGame() {
+	/*
+	 * class field
+	 */
+	
+	private PrintStream out = System.out;
+	private InputStream in = System.in;
+	private BufferedReader br;
+	
+	private ConnectFour c4;
+	
+	private Player player1 = Player.Player1;
+	private Player player2 = Player.Player2;
+	
+	private IPlayerInput input1;
+	private IPlayerInput input2;
+	
+	public ConsoleGame() {
+		// create game core
+		c4 = new ConnectFour();
+		
+		// default inputs from console
+		input1 = new ConsolePlayerInput();
+		input2 = new ConsolePlayerInput();
+	}
+	
+	public ConnectFour getGameCore() {
+		return this.c4;
+	}
+	
+	/**
+	 * Prepare before entering main loop
+	 */
+	public void init() {
+		// bind input stream
+		br = new BufferedReader(new InputStreamReader(in));		
+	}
+	
+	/**
+	 * The main loop
+	 */
+	public void loop() {
+		while (true) {
+			beginGame();
+			
+			runGame();
+			
+			endGame();
+			
+			if (!restartGame()) break;
+		}
+	}
+	
+	protected void beginGame() {
 		c4.reset();
-		
-		//sc = new Scanner(in);
-		br = new BufferedReader(new InputStreamReader(in));
 	}
 	
-	public void endGame() {
-		
+	protected void endGame() {
+		// nothing at present
 	}
-	
-	public void runGame() {
+
+	/**
+	 * a single game pass
+	 */
+	protected void runGame() {
 		
 		renderBoard();
 		
@@ -47,8 +137,28 @@ public class ConsoleGame {
 		
 	}
 	
-	public void renderBoard() {
-		Board board = c4.getBoard();
+	/**
+	 * If restart a new game
+	 * @return
+	 */
+	protected boolean restartGame() {
+		out.println("Restart? (q to quit)");
+		try {
+			if (br.readLine().equalsIgnoreCase("q")) {
+				return false;
+			} else {
+				return true;
+			}
+		} catch (IOException e) {
+			return false;
+		}
+	}
+	
+	/**
+	 * Render the game board on the console.
+	 */
+	protected void renderBoard() {
+		final Board board = c4.getBoard();
 		final int nrow = board.getNumRow();
 		final int ncol = board.getNumCol();
 		
@@ -69,15 +179,11 @@ public class ConsoleGame {
 	}
 	
 	protected int playerInput(Player player) throws NumberFormatException {
-		int col = -1;
-		try {
-			col = Integer.parseInt(br.readLine()) - 1;
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			throw new RuntimeException(e.getMessage());
+		if (player.getId() == player1.getId()) {
+			return input1.chooseColumn();
+		} else {
+			return input2.chooseColumn();
 		}
-		return col;
 	}
 	
 	protected boolean playerRound(Player player) {
@@ -123,14 +229,45 @@ public class ConsoleGame {
 		return false;
 	}
 	
+	public void setPlayer1UseAI() {
+		this.input1 = new ConsoleRobotInput(new StupidAI(c4, player1, player2));
+	}
 	
+	public void setPlayer2UseAI() {
+		this.input2 = new ConsoleRobotInput(new StupidAI(c4, player2, player1));
+	}
+	
+	/**
+	 * For test only
+	 * @param out
+	 */
+	void setOutput(PrintStream out) {
+		this.out = out;
+	}
+
+	void setInput(InputStream in) {
+		this.in = in;
+	}
+	
+	
+	/**
+	 * Console program entry point.
+	 * @param args
+	 */
 	public static void main(String[] args) {
+		
 		ConsoleGame game = new ConsoleGame();
 		
-		game.beginGame();
+		for (int i=0; i<args.length; i++) {
+			if (args[i].equals("-p1=ai")) {
+				game.setPlayer1UseAI();
+			} else if (args[i].equals("-p2=ai")) {
+				game.setPlayer2UseAI();
+			}
+		}
 		
-		game.runGame();
-	
-		game.endGame();
+		game.init();
+		game.loop();
+		
 	}
 }
